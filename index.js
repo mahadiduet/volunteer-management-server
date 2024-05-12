@@ -1,9 +1,18 @@
 const express = require('express');
 const cors = require('cors');
+const jwt = require('jsonwebtoken');
+const cookieParser = require('cookie-parser');
+require('dotenv').config();
 const app = express();
 const port = process.env.PORT || 5000;
 app.use(express.json());
-app.use(cors());
+app.use(cookieParser());
+app.use(cors({
+  origin: [
+    'http://localhost:5173'
+  ],
+  credentials: true
+}));
 
 app.get('/', (req, res) => {
   res.send('Server running......');
@@ -15,7 +24,7 @@ app.listen(port, () => {
 
 
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
-const uri = "mongodb+srv://mahadi_volunteers:p0s0gEu9zGZ4fiUw@cluster0.lyuai16.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
+const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.lyuai16.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
 const client = new MongoClient(uri, {
@@ -25,11 +34,47 @@ const client = new MongoClient(uri, {
     deprecationErrors: true,
   }
 });
+const logger = (req, res, next) => {
+  next();
+}
+
+const verifyToken = (req, res, next) => {
+  const token = req?.cookies?.token;
+  if (!token) {
+    return res.status(401).send({ message: 'Unauthorized Access' })
+  }
+  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+    if (err) {
+      // console.log(err);
+      return res.status(401).send({ message: 'Unauthorized Access' })
+    }
+    req.user = decoded;
+    next();
+  })
+}
 
 async function run() {
   try {
 
     const volunteerCollection = client.db("volunteers_management").collection("volunteers_post");
+
+
+    // Auth related api
+    app.post('/jwt', logger, async (req, res) => {
+      const user = req.body;
+      const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1h' });
+      res.cookie('token', token, {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'none'
+      })
+        .send({ success: true });
+    })
+
+    app.post('/logout', async (req, res) => {
+      const user = req.body;
+      res.clearCookie('token', { maxAge: 0 }).send({ success: true })
+    })
 
     // Add Volunteers post api
     app.post('/addVolunteersPost', async (req, res) => {
@@ -59,9 +104,11 @@ async function run() {
     })
 
     //  My volunteer post
-    app.get('/myvolunteerpost', async (req, res) => {
+    app.get('/myvolunteerpost', verifyToken, async (req, res) => {
       const email = req.query.email;
-      // console.log(email);
+      if (req.user.email !== req.query.email) {
+        return res.status(403).send({ message: 'forbidden access' })
+      }
       const data = await volunteerCollection.find({ email: email }).sort({ _id: -1 }).toArray();
       res.send(data);
     })
