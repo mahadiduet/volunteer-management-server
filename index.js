@@ -9,7 +9,9 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(cors({
   origin: [
-    'http://localhost:5173'
+    // 'http://localhost:5173',
+    'https://volunteer-management-b22ec.web.app',
+    'https://volunteer-management-b22ec.firebaseapp.com'
   ],
   credentials: true
 }));
@@ -53,27 +55,30 @@ const verifyToken = (req, res, next) => {
   })
 }
 
+const cookieOptions = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: process.env.NODE_ENV === "production" ? "none" : "strict",
+};
+
 async function run() {
   try {
 
     const volunteerCollection = client.db("volunteers_management").collection("volunteers_post");
+    const beVolunteerCollection = client.db("volunteers_management").collection("be_volunteers_post");
 
 
     // Auth related api
     app.post('/jwt', logger, async (req, res) => {
       const user = req.body;
       const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1h' });
-      res.cookie('token', token, {
-        httpOnly: true,
-        secure: true,
-        sameSite: 'none'
-      })
+      res.cookie('token', token, cookieOptions)
         .send({ success: true });
     })
 
     app.post('/logout', async (req, res) => {
       const user = req.body;
-      res.clearCookie('token', { maxAge: 0 }).send({ success: true })
+      res.clearCookie('token', { ...cookieOptions, maxAge: 0 }).send({ success: true })
     })
 
     // Add Volunteers post api
@@ -92,6 +97,7 @@ async function run() {
 
     // Get All volunteers post api
     app.get('/volunteersPost', async (req, res) => {
+      // { postTitle: { $regex: /education/i } }
       const data = await volunteerCollection.find().sort({ deadline: 1 }).toArray();
       res.send(data);
     })
@@ -126,6 +132,7 @@ async function run() {
       const id = req.params.id;
       // console.log(req.body);
       const filter = { _id: new ObjectId(id) };
+      // console.log(filter);
       const options = { upsert: true };
       const updateData = {
         $set: req.body
@@ -134,6 +141,44 @@ async function run() {
       console.log(`A document was inserted with the _id: ${result}`);
       res.send(result);
     })
+
+    // Be Volunteer api
+    app.post('/be-volunteer', async (req, res) => {
+      const beVolunteerData = req.body;
+      // console.log(beVolunteerData);
+      const result = await beVolunteerCollection.insertOne(beVolunteerData);
+      res.send(result);
+      // console.log(data);
+    })
+
+    // Update No of Volunteer after request be Vounteer
+    app.put('/be-volunteer/:id', async (req, res) => {
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      // console.log(id);
+      const data = req.body.updateNoOfVolunteer;
+      // console.log(data);
+      const updateData = { $set: { 'noOfVolunteersNeeded': data } };
+      const result = await volunteerCollection.updateOne(filter, updateData);
+      res.send(result);
+    })
+
+    // My Volunteer Request Post
+    app.get('/my-request-volunteer-post', verifyToken, async (req, res) => {
+      const email = req.query.email;
+      // console.log('User Email:',email);
+      const data = await beVolunteerCollection.find({ 'user_email': email }).sort({ _id: -1 }).toArray();
+      res.send(data);
+    })
+
+    // Request post cancel
+    app.delete('/my-request-volunteer-post-cancel/:id', async (req, res) => {
+      const id = new ObjectId(req.params.id);
+      const query = { _id: id };
+      const result = await beVolunteerCollection.deleteOne(query);
+      res.send(result);
+    })
+
 
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
