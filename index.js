@@ -13,7 +13,7 @@ app.use(
     origin: [
       "http://localhost:5173",
       "https://volunteer-management-b22ec.web.app",
-      "https://volunteer-management-b22ec.firebaseapp.com",
+      "https://volunteer-management-b22ec.firebaseapp.com"
     ],
     credentials: true,
   })
@@ -74,15 +74,33 @@ async function run() {
 
     // Auth related api
     app.post('/jwt', logger, async (req, res) => {
-      const user = req.body;
-      const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1h' });
-      res.cookie('token', token, cookieOptions)
-        .send({ success: true });
+      try {
+        const user = req.body;
+        const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET,
+          {
+            expiresIn: '1h'
+          });
+        res.cookie('token', token, cookieOptions)
+          .send({ success: true });
+      }
+      catch {
+        res.send({
+          status: true,
+          error: error.message,
+        })
+      }
     })
 
     app.post('/logout', async (req, res) => {
       // const user = req.body;
-      res.clearCookie('token', { ...cookieOptions, maxAge: 0 }).send({ success: true })
+      // res.clearCookie('token', { ...cookieOptions, maxAge: 0 }).send({ success: true })
+      const user = req.body
+      res.clearCookie('token', {
+          maxAge: 0,
+          secure: process.env.NODE_ENV === 'production' ? true : false,
+          sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
+        })
+        .send({ status: true })
     })
 
     // Add Volunteers post api
