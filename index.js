@@ -118,7 +118,6 @@ async function run() {
 
     // Get All volunteers post api
     app.get('/volunteersPost', async (req, res) => {
-      // { postTitle: { $regex: /education/i } }
       const data = await volunteerCollection.find().sort({ deadline: 1 }).toArray();
       res.send(data);
     })
@@ -151,9 +150,7 @@ async function run() {
     // Update post
     app.put('/update-post/:id', async (req, res) => {
       const id = req.params.id;
-      // console.log(req.body);
       const filter = { _id: new ObjectId(id) };
-      // console.log(filter);
       const options = { upsert: true };
       const updateData = {
         $set: req.body
@@ -166,19 +163,15 @@ async function run() {
     // Be Volunteer api
     app.post('/be-volunteer', async (req, res) => {
       const beVolunteerData = req.body;
-      // console.log(beVolunteerData);
       const result = await beVolunteerCollection.insertOne(beVolunteerData);
       res.send(result);
-      // console.log(data);
     })
 
     // Update No of Volunteer after request be Vounteer
     app.put('/be-volunteer/:id', async (req, res) => {
       const id = req.params.id;
       const filter = { _id: new ObjectId(id) };
-      // console.log(id);
       const data = req.body.updateNoOfVolunteer;
-      // console.log(data);
       const updateData = { $set: { 'noOfVolunteersNeeded': data } };
       const result = await volunteerCollection.updateOne(filter, updateData);
       res.send(result);
@@ -187,7 +180,6 @@ async function run() {
     // My Volunteer Request Post
     app.get('/my-request-volunteer-post', verifyToken, async (req, res) => {
       const email = req.query.email;
-      // console.log('User Email:',email);
       const data = await beVolunteerCollection.find({ 'user_email': email }).sort({ _id: -1 }).toArray();
       res.send(data);
     })
